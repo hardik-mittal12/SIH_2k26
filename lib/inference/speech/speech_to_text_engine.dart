@@ -37,8 +37,8 @@ abstract class SpeechToTextEngine {
     void Function(bool uploadFinished)? onUploadFinished,
   });
 
-  /// One request that transcribes [wavAudio] in [source] and translates the
-  /// transcript into [target] (POST /api/voice-translate on the backend).
+  /// One request that transcribes [wavAudio] in [source] and translates it
+  /// into [target] (POST /api/voice-translate on the backend).
   Future<VoiceTranslationResult> translateSpeech({
     required Uint8List wavAudio,
     required Language source,
