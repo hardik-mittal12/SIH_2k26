@@ -72,7 +72,7 @@ class _TranslationScreenState extends State<TranslationScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const _MockBanner(),
+            const _ModelNotice(),
             const SizedBox(height: 16),
             _DirectionSelector(
               direction: c.direction,
@@ -181,17 +181,17 @@ class _TranslationScreenState extends State<TranslationScreen> {
   }
 }
 
-class _MockBanner extends StatelessWidget {
-  const _MockBanner();
+class _ModelNotice extends StatelessWidget {
+  const _ModelNotice();
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.amber.shade100,
+          color: Theme.of(context).colorScheme.tertiaryContainer,
           borderRadius: BorderRadius.circular(8),
         ),
         child: const Text(
-          'DEVELOPMENT MOCK — translation and voice results are placeholders, not real Santali/Hindi translations.',
+          'On-device AI only. This repository does not package IndicConformer or IndicTrans2 weights. The status below reports whether local inference is available; the production app does not fall back to mock output.',
         ),
       );
 }
@@ -248,6 +248,7 @@ class _StatusCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ready = controller.models.state == ModelState.ready;
+    final failed = controller.models.state == ModelState.error;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -261,10 +262,14 @@ class _StatusCard extends StatelessWidget {
                   color: ready ? Colors.green : null,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  ready
-                      ? 'Offline · translation model ready'
-                      : 'Offline model loading',
+                Expanded(
+                  child: Text(
+                    ready
+                        ? 'Local inference runtime ready'
+                        : failed
+                            ? 'Local models unavailable'
+                            : 'Checking local model availability',
+                  ),
                 ),
               ],
             ),

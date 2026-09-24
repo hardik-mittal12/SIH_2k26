@@ -101,28 +101,32 @@ class ModelManager {
     }
   }
 
-  Future<String> recognize(Language language) async {
-    if (state != ModelState.ready || !_speechEngine.isAvailable(language)) {
+  Future<void> startSpeech(Language language) async {
+    if (!_speechEngine.isAvailable(language)) {
       throw StateError(
         'Offline speech model is unavailable for ${language.label}.',
       );
     }
+    await _speechEngine.startRecording(language);
+  }
+
+  Future<String> stopSpeech(Language language) async {
     final timer = Stopwatch()..start();
     try {
-      final text = await _speechEngine.recognize(language: language);
+      final text = await _speechEngine.stopRecordingAndRecognize(language);
       timer.stop();
       lastSpeechTime = timer.elapsed;
       if (text.trim().isEmpty) {
         throw StateError('No speech was detected. Please try again.');
       }
-      return text;
+      return text.trim();
     } catch (error) {
       timer.stop();
       throw StateError('Speech recognition failed: $error');
     }
   }
 
-  Future<void> stopSpeech() => _speechEngine.stop();
+  Future<void> cancelSpeech() => _speechEngine.cancelRecording();
   Future<BenchmarkResult> benchmark(TranslationDirection direction) async {
     const samples = [
       'आपका नाम क्या है?',

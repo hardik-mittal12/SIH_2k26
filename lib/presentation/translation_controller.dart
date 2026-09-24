@@ -70,35 +70,45 @@ class TranslationController extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    phase = TranslationPhase.listening;
     error = null;
-    notifyListeners();
     try {
-      input = await _models.recognize(direction.source);
-      phase = TranslationPhase.ready;
-      notifyListeners();
-      await translate();
-      if (metrics != null && _models.lastSpeechTime != null) {
-        metrics = TranslationMetrics(
-          preprocessing: metrics!.preprocessing,
-          inference: metrics!.inference,
-          postprocessing: metrics!.postprocessing,
-          speechRecognition: _models.lastSpeechTime,
-          total: _models.lastSpeechTime! + metrics!.total,
-          fromCache: metrics!.fromCache,
-        );
-        notifyListeners();
-      }
+      await _models.startSpeech(direction.source);
+      phase = TranslationPhase.listening;
     } catch (exception) {
       error = exception.toString().replaceFirst('Bad state: ', '');
       phase = TranslationPhase.error;
-      notifyListeners();
     }
+    notifyListeners();
   }
 
   Future<void> stopVoice() async {
-    await _models.stopSpeech();
-    phase = TranslationPhase.ready;
+    if (phase != TranslationPhase.listening) return;
+    phase = TranslationPhase.translating;
+    error = null;
+    notifyListeners();
+    try {
+      input = await _models.stopSpeech(direction.source);
+      final speechDuration = _models.lastSpeechTime;
+      // Keep the transcript visible if the ASR or translation stage fails.
+      final result = await _models.translate(
+        text: input,
+        source: direction.source,
+        target: direction.target,
+      );
+      output = result.text;
+      metrics = TranslationMetrics(
+        preprocessing: result.metrics.preprocessing,
+        inference: result.metrics.inference,
+        postprocessing: result.metrics.postprocessing,
+        speechRecognition: speechDuration,
+        total: (speechDuration ?? Duration.zero) + result.metrics.total,
+        fromCache: result.metrics.fromCache,
+      );
+      phase = TranslationPhase.ready;
+    } catch (exception) {
+      error = exception.toString().replaceFirst('Bad state: ', '');
+      phase = TranslationPhase.error;
+    }
     notifyListeners();
   }
 

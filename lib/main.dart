@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'inference/model_manager.dart';
-import 'inference/speech/mock_speech_engine.dart';
-import 'inference/translation/mock_translation_engine.dart';
+import 'inference/speech/platform_speech_engine.dart';
+import 'inference/translation/platform_translation_engine.dart';
 import 'presentation/translation_controller.dart';
 import 'presentation/translation_screen.dart';
 import 'services/permission_service.dart';
@@ -9,8 +9,8 @@ import 'services/permission_service.dart';
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   final manager = ModelManager(
-    translationEngine: MockTranslationEngine(),
-    speechEngine: MockSpeechEngine(),
+    translationEngine: PlatformTranslationEngine(),
+    speechEngine: PlatformSpeechEngine(),
   );
   runApp(
     SantaliSetuApp(
