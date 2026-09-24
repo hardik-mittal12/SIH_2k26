@@ -2,6 +2,12 @@
 *.class
 *.log
 *.pyc
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
 *.swp
 .DS_Store
 .atom/
@@ -22,6 +28,9 @@ migrate_working_dir/
 # VS Code which you may wish to be included in version control, so this line
 # is commented out by default.
 #.vscode/
+
+# Node.js
+**/node_modules/
 
 # Flutter/Dart/Pub related
 **/doc/api/

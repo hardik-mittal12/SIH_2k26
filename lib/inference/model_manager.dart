@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import '../core/performance/performance_metrics.dart';
 import '../domain/language.dart';
 import '../domain/translation_result.dart';
 import '../services/translation_cache.dart';
 import 'speech/speech_engine.dart';
+import 'speech/speech_to_text_engine.dart';
 import 'translation/translation_engine.dart';
 
 enum ModelState { idle, loading, warming, ready, error, disposed }
@@ -11,12 +14,15 @@ class ModelManager {
   ModelManager({
     required TranslationEngine translationEngine,
     required SpeechEngine speechEngine,
+    required SpeechToTextEngine speechToTextEngine,
     TranslationCache? cache,
   })  : _translationEngine = translationEngine,
         _speechEngine = speechEngine,
+        _speechToTextEngine = speechToTextEngine,
         cache = cache ?? TranslationCache();
   final TranslationEngine _translationEngine;
   final SpeechEngine _speechEngine;
+  final SpeechToTextEngine _speechToTextEngine;
   final TranslationCache cache;
   ModelState state = ModelState.idle;
   String? errorMessage;
@@ -39,8 +45,8 @@ class ModelManager {
     errorMessage = null;
     final load = Stopwatch()..start();
     try {
-      await _translationEngine.initialize();
       await Future.wait([
+        _translationEngine.initialize(),
         for (final language in Language.values)
           _speechEngine.initialize(language),
       ]);
@@ -55,7 +61,7 @@ class ModelManager {
     } catch (error) {
       load.stop();
       state = ModelState.error;
-      errorMessage = 'Could not initialize offline models: $error';
+      errorMessage = 'Could not initialize the Sarvam translation service: $error';
     }
   }
 
@@ -65,7 +71,7 @@ class ModelManager {
     required Language target,
   }) async {
     if (state != ModelState.ready) {
-      throw StateError(errorMessage ?? 'Offline model is not ready.');
+      throw StateError(errorMessage ?? 'Sarvam backend is not ready.');
     }
     if (text.trim().isEmpty) throw ArgumentError('Enter text to translate.');
     if (text.runes.length > 2000) {
@@ -102,24 +108,46 @@ class ModelManager {
   }
 
   Future<void> startSpeech(Language language) async {
+    if (state != ModelState.ready) {
+      throw StateError(errorMessage ?? 'The translation service is not ready.');
+    }
     if (!_speechEngine.isAvailable(language)) {
       throw StateError(
-        'Offline speech model is unavailable for ${language.label}.',
+        'Microphone capture is unavailable for ${language.label}.',
       );
     }
     await _speechEngine.startRecording(language);
   }
 
-  Future<String> stopSpeech(Language language) async {
+  Future<Uint8List> stopSpeech(Language language) async {
+    try {
+      final audio = await _speechEngine.stopRecording(language);
+      if (audio.length <= 44) throw StateError('The recording was empty. Please try again.');
+      return audio;
+    } catch (error) {
+      throw StateError('Recording failed: $error');
+    }
+  }
+
+  Future<SpeechRecognitionResult> transcribe({
+    required Uint8List wavAudio,
+    required Language language,
+    void Function(bool uploadFinished)? onUploadFinished,
+  }) async {
+    if (state != ModelState.ready) {
+      throw StateError(errorMessage ?? 'The Sarvam backend is not ready.');
+    }
     final timer = Stopwatch()..start();
     try {
-      final text = await _speechEngine.stopRecordingAndRecognize(language);
+      final result = await _speechToTextEngine.transcribe(
+        wavAudio: wavAudio,
+        language: language,
+        onUploadFinished: onUploadFinished,
+      );
       timer.stop();
-      lastSpeechTime = timer.elapsed;
-      if (text.trim().isEmpty) {
-        throw StateError('No speech was detected. Please try again.');
-      }
-      return text.trim();
+      lastSpeechTime = result.elapsed == Duration.zero ? timer.elapsed : result.elapsed;
+      if (result.text.trim().isEmpty) throw StateError('No speech was detected. Please try again.');
+      return result;
     } catch (error) {
       timer.stop();
       throw StateError('Speech recognition failed: $error');
@@ -127,25 +155,6 @@ class ModelManager {
   }
 
   Future<void> cancelSpeech() => _speechEngine.cancelRecording();
-  Future<BenchmarkResult> benchmark(TranslationDirection direction) async {
-    const samples = [
-      'आपका नाम क्या है?',
-      'नमस्ते',
-      'कृपया मेरी सहायता करें।',
-      'आज मौसम अच्छा है।',
-    ];
-    final durations = <Duration>[];
-    for (final text in samples) {
-      final result = await _translationEngine.translate(
-        text: text,
-        sourceLanguage: direction.source,
-        targetLanguage: direction.target,
-      );
-      durations.add(result.metrics.total);
-    }
-    return BenchmarkResult(durations);
-  }
-
   Future<void> dispose() async {
     await _speechEngine.dispose();
     await _translationEngine.dispose();

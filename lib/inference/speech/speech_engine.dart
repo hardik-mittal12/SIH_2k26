@@ -1,12 +1,13 @@
+import 'dart:typed_data';
+
 import '../../domain/language.dart';
 
-/// Speech adapter contract. Recording returns real captured audio; recognition
-/// must be supplied by an installed local model/runtime, never a canned result.
+/// Captures device audio only. Recognition is performed by the backend service.
 abstract class SpeechEngine {
   Future<void> initialize(Language language);
   bool isAvailable(Language language);
   Future<void> startRecording(Language language);
-  Future<String> stopRecordingAndRecognize(Language language);
+  Future<Uint8List> stopRecording(Language language);
   Future<void> cancelRecording();
   Future<void> dispose();
 }

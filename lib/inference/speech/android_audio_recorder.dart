@@ -5,34 +5,16 @@ import 'package:flutter/services.dart';
 import '../../domain/language.dart';
 import 'speech_engine.dart';
 
-/// Android platform adapter for native PCM recording and model-backed ASR.
-/// It intentionally fails closed if the native runtime/checkpoint is missing.
-class PlatformSpeechEngine implements SpeechEngine {
-  static const _channel = MethodChannel('org.sih.santali_setu/inference');
+/// Android microphone bridge. Speech decoding is intentionally not performed here.
+class AndroidAudioRecorder implements SpeechEngine {
+  static const _channel = MethodChannel('org.sih.santali_setu/audio');
   final Set<Language> _available = {};
   Language? _recordingLanguage;
 
-  String _code(Language language) => language == Language.hindi ? 'hi' : 'sat';
-
   @override
   Future<void> initialize(Language language) async {
-    try {
-      final status = await _channel.invokeMapMethod<String, dynamic>(
-        'initializeSpeech',
-        {'language': _code(language)},
-      );
-      if (status?['available'] == true) {
-        _available.add(language);
-      } else {
-        _available.remove(language);
-      }
-    } on PlatformException catch (error) {
-      _available.remove(language);
-      throw StateError(error.message ?? 'Speech model initialization failed.');
-    } on MissingPluginException {
-      _available.remove(language);
-      throw StateError('Native Android speech inference is not installed.');
-    }
+    // AudioRecord is language-independent; the selected locale is sent to the backend later.
+    _available.add(language);
   }
 
   @override
@@ -40,12 +22,15 @@ class PlatformSpeechEngine implements SpeechEngine {
 
   @override
   Future<void> startRecording(Language language) async {
+    if (!isAvailable(language)) {
+      throw StateError('Microphone capture is unavailable for ${language.label}.');
+    }
     if (_recordingLanguage != null) {
       throw StateError('A recording is already active. Stop it before starting another.');
     }
     try {
       await _channel.invokeMethod<void>('startRecording', {
-        'language': _code(language),
+        'language': language.sarvamCode,
       });
       _recordingLanguage = language;
     } on PlatformException catch (error) {
@@ -56,7 +41,7 @@ class PlatformSpeechEngine implements SpeechEngine {
   }
 
   @override
-  Future<String> stopRecordingAndRecognize(Language language) async {
+  Future<Uint8List> stopRecording(Language language) async {
     if (_recordingLanguage != language) {
       throw StateError('No active ${language.label} recording.');
     }
@@ -66,15 +51,11 @@ class PlatformSpeechEngine implements SpeechEngine {
       if (audio == null || audio.length <= 44) {
         throw StateError('The recording was empty. Speak for longer and try again.');
       }
-      return await _channel.invokeMethod<String>('recognize', {
-            'language': _code(language),
-            'wav': audio,
-          }) ??
-          '';
+      return audio;
     } on PlatformException catch (error) {
-      throw StateError(error.message ?? 'Speech recognition failed.');
+      throw StateError(error.message ?? 'Could not finish microphone recording.');
     } on MissingPluginException {
-      throw StateError('Native IndicConformer inference is unavailable.');
+      throw StateError('Android microphone recording is unavailable on this platform.');
     }
   }
 
@@ -85,7 +66,7 @@ class PlatformSpeechEngine implements SpeechEngine {
     try {
       await _channel.invokeMethod<void>('cancelRecording');
     } on PlatformException {
-      // Best-effort release during cancellation/disposal.
+      // Best-effort recorder release during cancellation/disposal.
     } on MissingPluginException {
       // No native recorder exists on this platform.
     }

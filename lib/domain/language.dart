@@ -4,6 +4,7 @@ extension LanguageLabel on Language {
   String get label => this == Language.hindi ? 'Hindi' : 'Santali';
   String get speechLabel =>
       this == Language.hindi ? 'Speak Hindi' : 'Speak Santali';
+  String get sarvamCode => this == Language.hindi ? 'hi-IN' : 'sat-IN';
 }
 
 class TranslationDirection {

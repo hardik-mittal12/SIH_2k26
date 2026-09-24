@@ -15,7 +15,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.atomic.AtomicBoolean
 
-/** Android microphone capture and the inference platform boundary. */
+/** Android WAV microphone capture bridge. Cloud inference is performed by the backend. */
 class MainActivity : FlutterActivity() {
     private var microphoneResult: MethodChannel.Result? = null
     private var recorder: AudioRecord? = null
@@ -27,35 +27,15 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.sih.santali_setu/inference")
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "org.sih.santali_setu/audio")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "initializeSpeech" -> result.success(mapOf(
-                        "available" to false,
-                        "modelVersion" to "ai4bharat/indic-conformer-600m-multilingual",
-                        "message" to "IndicConformer weights and a compatible Android inference runtime are not installed. Audio recording is available, but recognition is disabled rather than returning fabricated text."
-                    ))
-                    "initializeTranslation" -> result.success(mapOf(
-                        "available" to false,
-                        "modelVersion" to "ai4bharat/indictrans2-indic-indic-dist-320M",
-                        "message" to "IndicTrans2 weights and a compatible Android inference runtime are not installed. Translation is disabled rather than returning fabricated text."
-                    ))
                     "startRecording" -> startRecording(result)
                     "stopRecording" -> stopRecording(result)
                     "cancelRecording" -> {
                         stopAndReleaseRecorder()
                         result.success(null)
                     }
-                    "recognize" -> result.error(
-                        "INDICCONFORMER_UNAVAILABLE",
-                        "IndicConformer Android inference has not been integrated; no transcription was produced.",
-                        null
-                    )
-                    "translate" -> result.error(
-                        "INDICTRANS2_UNAVAILABLE",
-                        "IndicTrans2 Android inference has not been integrated; no translation was produced.",
-                        null
-                    )
                     else -> result.notImplemented()
                 }
             }

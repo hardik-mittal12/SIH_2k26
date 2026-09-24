@@ -1,7 +1,9 @@
+import 'dart:typed_data';
+
 import '../../domain/language.dart';
 import 'speech_engine.dart';
 
-/// Test-only fake. It is never wired into the production application.
+/// Test-only recorder stub. It never produces synthetic audio or a transcript.
 class MockSpeechEngine implements SpeechEngine {
   final Set<Language> _ready = {};
   Language? _recording;
@@ -16,15 +18,15 @@ class MockSpeechEngine implements SpeechEngine {
 
   @override
   Future<void> startRecording(Language language) async {
-    if (!isAvailable(language)) throw StateError('Speech test engine is not initialized.');
+    if (!isAvailable(language)) throw StateError('Test recorder is not initialized.');
     _recording = language;
   }
 
   @override
-  Future<String> stopRecordingAndRecognize(Language language) async {
+  Future<Uint8List> stopRecording(Language language) async {
     if (_recording != language) throw StateError('No active test recording.');
     _recording = null;
-    throw UnsupportedError('MockSpeechEngine does not synthesize transcription output.');
+    throw UnsupportedError('Test recorder does not create audio data.');
   }
 
   @override

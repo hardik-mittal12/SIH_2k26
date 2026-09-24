@@ -46,9 +46,7 @@ class _TranslationScreenState extends State<TranslationScreen> {
   @override
   Widget build(BuildContext context) {
     final c = widget.controller;
-    final busy = c.phase == TranslationPhase.translating ||
-        c.phase == TranslationPhase.listening ||
-        c.phase == TranslationPhase.booting;
+    final busy = c.isBusy;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Santali Setu'),
@@ -72,7 +70,7 @@ class _TranslationScreenState extends State<TranslationScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            const _ModelNotice(),
+            const _ApiNotice(),
             const SizedBox(height: 16),
             _DirectionSelector(
               direction: c.direction,
@@ -96,22 +94,29 @@ class _TranslationScreenState extends State<TranslationScreen> {
               ),
             ),
             const SizedBox(height: 10),
+            if (c.phase == TranslationPhase.recording) ...[
+              const Text('Recording… Tap “Stop recording” when finished.'),
+              const SizedBox(height: 8),
+            ],
             OutlinedButton.icon(
-              onPressed: c.phase == TranslationPhase.listening
+              onPressed: c.phase == TranslationPhase.recording
                   ? c.stopVoice
                   : busy
                       ? null
                       : c.startVoice,
               icon: Icon(
-                c.phase == TranslationPhase.listening
+                c.phase == TranslationPhase.recording
                     ? Icons.stop_circle_outlined
                     : Icons.mic_none,
               ),
-              label: Text(
-                c.phase == TranslationPhase.listening
-                    ? 'Stop listening'
-                    : c.direction.source.speechLabel,
-              ),
+              label: Text(switch (c.phase) {
+                TranslationPhase.recording => 'Stop recording',
+                TranslationPhase.uploading => 'Uploading audio…',
+                TranslationPhase.transcribing => 'Transcribing…',
+                TranslationPhase.translating => 'Translating…',
+                TranslationPhase.booting => 'Connecting to service…',
+                _ => c.direction.source.speechLabel,
+              }),
             ),
             const SizedBox(height: 16),
             FilledButton(
@@ -181,8 +186,8 @@ class _TranslationScreenState extends State<TranslationScreen> {
   }
 }
 
-class _ModelNotice extends StatelessWidget {
-  const _ModelNotice();
+class _ApiNotice extends StatelessWidget {
+  const _ApiNotice();
   @override
   Widget build(BuildContext context) => Container(
         padding: const EdgeInsets.all(12),
@@ -191,7 +196,7 @@ class _ModelNotice extends StatelessWidget {
           borderRadius: BorderRadius.circular(8),
         ),
         child: const Text(
-          'On-device AI only. This repository does not package IndicConformer or IndicTrans2 weights. The status below reports whether local inference is available; the production app does not fall back to mock output.',
+          'Speech and translation use the configured backend and Sarvam AI. Audio and text are sent to the backend for processing; the Sarvam API key is never stored in this app.'
         ),
       );
 }
@@ -265,10 +270,10 @@ class _StatusCard extends StatelessWidget {
                 Expanded(
                   child: Text(
                     ready
-                        ? 'Local inference runtime ready'
+                        ? 'Sarvam backend ready'
                         : failed
-                            ? 'Local models unavailable'
-                            : 'Checking local model availability',
+                            ? 'Sarvam backend unavailable'
+                            : 'Connecting to Sarvam backend',
                   ),
                 ),
               ],
