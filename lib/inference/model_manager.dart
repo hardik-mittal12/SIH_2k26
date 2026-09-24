@@ -161,8 +161,11 @@ class ModelManager {
     void Function(bool uploadFinished)? onUploadFinished,
   }) async {
     if (state != ModelState.ready) {
-      throw StateError(errorMessage ?? 'The Sarvam backend is not ready.');
+      throw StateError(
+        errorMessage ?? 'The Sarvam backend is not ready.',
+      );
     }
+
     try {
       return await _speechToTextEngine.translateSpeech(
         wavAudio: wavAudio,
