@@ -163,12 +163,8 @@ class ModelManager {
     if (state != ModelState.ready) {
       throw StateError(errorMessage ?? 'The Sarvam backend is not ready.');
     }
-    final engine = _speechToTextEngine;
-    if (engine is! VoiceTranslationEngine) {
-      throw StateError('Voice translation is unavailable in this build.');
-    }
     try {
-      return await engine.translateSpeech(
+      return await _speechToTextEngine.translateSpeech(
         wavAudio: wavAudio,
         source: source,
         target: target,

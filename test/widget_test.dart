@@ -20,6 +20,14 @@ class _NoSpeechNetwork implements SpeechToTextEngine {
     required Language language,
     void Function(bool uploadFinished)? onUploadFinished,
   }) => throw UnsupportedError('This widget test never sends real audio.');
+
+  @override
+  Future<VoiceTranslationResult> translateSpeech({
+    required Uint8List wavAudio,
+    required Language source,
+    required Language target,
+    void Function(bool uploadFinished)? onUploadFinished,
+  }) => throw UnsupportedError('This widget test never sends real audio.');
 }
 
 class _WidgetAudioRecorder implements SpeechEngine {
@@ -57,7 +65,7 @@ class _WidgetAudioRecorder implements SpeechEngine {
   }
 }
 
-class _WidgetVoiceTranslation implements SpeechToTextEngine, VoiceTranslationEngine {
+class _WidgetVoiceTranslation implements SpeechToTextEngine {
   final List<Language> spokenLanguages = [];
 
   @override
@@ -105,7 +113,9 @@ void main() {
     expect(find.text('SPEAK IN'), findsOneWidget);
     expect(find.text('TRANSLATE TO'), findsOneWidget);
     expect(find.text('Hindi'), findsOneWidget);
-    expect(find.text('Santali'), findsOneWidget);
+    // 'Santali' labels the direction card and, once scrolled into view, the
+    // translation result card header; the screen must show at least one.
+    expect(find.text('Santali'), findsWidgets);
     expect(find.text('Tap to speak'), findsOneWidget);
     expect(find.text('Your words will appear here'), findsOneWidget);
     expect(find.text('Your translation will appear here.'), findsOneWidget);

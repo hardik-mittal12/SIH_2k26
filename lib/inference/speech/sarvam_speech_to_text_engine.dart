@@ -4,8 +4,7 @@ import '../../domain/language.dart';
 import '../../services/sarvam_backend_client.dart';
 import 'speech_to_text_engine.dart';
 
-class SarvamSpeechToTextEngine
-    implements SpeechToTextEngine, VoiceTranslationEngine {
+class SarvamSpeechToTextEngine implements SpeechToTextEngine {
   const SarvamSpeechToTextEngine(this._backend);
   final SarvamBackendClient _backend;
 
