@@ -28,10 +28,37 @@ class SantaliSetuApp extends StatelessWidget {
   const SantaliSetuApp({super.key, required this.controller});
   final TranslationController controller;
 
+  ThemeData _theme(Brightness brightness) {
+    final scheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF176B4A),
+      brightness: brightness,
+    );
+    return ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: scheme.surface,
+      appBarTheme: AppBarTheme(
+        backgroundColor: scheme.surface,
+        foregroundColor: scheme.onSurface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: scheme.inverseSurface,
+        contentTextStyle: TextStyle(color: scheme.onInverseSurface),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      ),
+      visualDensity: VisualDensity.standard,
+    );
+  }
+
   @override
   Widget build(BuildContext context) => MaterialApp(
         title: 'Santali Setu',
-        theme: ThemeData(colorSchemeSeed: Colors.teal, useMaterial3: true),
+        debugShowCheckedModeBanner: false,
+        theme: _theme(Brightness.light),
+        darkTheme: _theme(Brightness.dark),
+        themeMode: ThemeMode.system,
         home: TranslationScreen(controller: controller),
       );
 }

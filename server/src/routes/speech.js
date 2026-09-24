@@ -34,7 +34,7 @@ export function isSupportedPcmWav(buffer) {
     dataBytes <= buffer.length - 44;
 }
 
-export function createSpeechRouter(sarvam) {
+export function createSpeechRouter(sarvam, { translateAudio = false } = {}) {
   const router = Router();
   router.post('/', upload.single('audio'), async (request, response, next) => {
     try {
@@ -66,11 +66,28 @@ export function createSpeechRouter(sarvam) {
         contentType: 'audio/wav',
         languageCode: language,
       });
+      if (!translateAudio) {
+        return response.json({
+          success: true,
+          text: result.text,
+          language: result.language,
+          requestId: result.requestId,
+        });
+      }
+      const targetLanguage = language === 'hi-IN' ? 'sat-IN' : 'hi-IN';
+      const translation = await sarvam.translate({
+        text: result.text,
+        sourceLanguage: language,
+        targetLanguage,
+      });
       return response.json({
         success: true,
+        transcript: result.text,
         text: result.text,
+        translatedText: translation.translatedText,
         language: result.language,
-        requestId: result.requestId,
+        targetLanguage,
+        requestId: result.requestId ?? translation.requestId ?? null,
       });
     } catch (error) {
       return next(error);

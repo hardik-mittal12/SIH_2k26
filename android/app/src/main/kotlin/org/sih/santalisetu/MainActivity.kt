@@ -1,4 +1,4 @@
-package com.example.santali_setu
+package org.sih.santalisetu
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -97,16 +97,21 @@ class MainActivity : FlutterActivity() {
 
     private fun captureLoop(audioRecord: AudioRecord) {
         val samples = ShortArray(2048)
-        while (isRecording.get()) {
-            val count = audioRecord.read(samples, 0, samples.size)
+        val maximumSamples = sampleRate * 30
+        var capturedSamples = 0
+        while (isRecording.get() && capturedSamples < maximumSamples) {
+            val requested = minOf(samples.size, maximumSamples - capturedSamples)
+            val count = audioRecord.read(samples, 0, requested)
             if (count > 0) {
                 val bytes = ByteBuffer.allocate(count * 2).order(ByteOrder.LITTLE_ENDIAN)
                 for (index in 0 until count) bytes.putShort(samples[index])
                 synchronized(captureLock) { capturedPcm.write(bytes.array()) }
+                capturedSamples += count
             } else if (count < 0) {
                 isRecording.set(false)
             }
         }
+        if (capturedSamples >= maximumSamples) isRecording.set(false)
     }
 
     private fun stopRecording(result: MethodChannel.Result) {

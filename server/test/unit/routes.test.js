@@ -77,6 +77,24 @@ test('speech route forwards Santali language selection to the provider', async (
   });
 });
 
+test('speech route rejects empty and malformed WAV files before provider call', async () => {
+  let called = false;
+  await withServer({
+    isConfigured: true,
+    async transcribe() { called = true; return { text: 'unreachable', language: 'hi-IN' }; },
+  }, async (base) => {
+    for (const bytes of [Buffer.alloc(0), Buffer.from('not a wav')]) {
+      const form = new FormData();
+      form.set('language', 'hi-IN');
+      form.set('audio', new Blob([bytes], { type: 'audio/wav' }), 'recording.wav');
+      const response = await fetch(`${base}/api/speech-to-text`, { method: 'POST', body: form });
+      assert.equal(response.status, 400);
+      assert.equal((await response.json()).code, 'INVALID_AUDIO_FORMAT');
+    }
+    assert.equal(called, false);
+  });
+});
+
 test('speech route rejects a bad language before provider call', async () => {
   let called = false;
   await withServer({
@@ -90,6 +108,54 @@ test('speech route rejects a bad language before provider call', async () => {
     assert.equal(response.status, 400);
     assert.equal((await response.json()).code, 'INVALID_LANGUAGE');
     assert.equal(called, false);
+  });
+});
+
+test('voice translation runs transcription then translation in each supported direction', async () => {
+  const observed = [];
+  await withServer({
+    isConfigured: true,
+    async transcribe(args) {
+      observed.push(['speech', args.languageCode]);
+      return {
+        text: args.languageCode === 'hi-IN' ? 'नमस्ते' : 'ᱡᱚᱦᱟᱨ',
+        language: args.languageCode,
+        requestId: 'speech-test',
+      };
+    },
+    async translate(args) {
+      observed.push(['translate', args.sourceLanguage, args.targetLanguage]);
+      return { translatedText: args.targetLanguage === 'sat-IN' ? 'ᱡᱚᱦᱟᱨ' : 'नमस्कार', requestId: 'translation-test' };
+    },
+  }, async (base) => {
+    for (const [language, targetLanguage] of [['hi-IN', 'sat-IN'], ['sat-IN', 'hi-IN']]) {
+      const form = new FormData();
+      form.set('language', language);
+      form.set('audio', new Blob([makePcmWav()], { type: 'audio/wav' }), 'recording.wav');
+      const response = await fetch(`${base}/api/voice-translate`, { method: 'POST', body: form });
+      const payload = await response.json();
+      assert.equal(response.status, 200);
+      assert.equal(payload.language, language);
+      assert.equal(payload.targetLanguage, targetLanguage);
+      assert.ok(payload.transcript);
+      assert.ok(payload.translatedText);
+    }
+    assert.deepEqual(observed, [
+      ['speech', 'hi-IN'], ['translate', 'hi-IN', 'sat-IN'],
+      ['speech', 'sat-IN'], ['translate', 'sat-IN', 'hi-IN'],
+    ]);
+  });
+});
+
+test('CORS preflight is answered without credentials', async () => {
+  await withServer({ isConfigured: true }, async (base) => {
+    const response = await fetch(`${base}/api/voice-translate`, {
+      method: 'OPTIONS',
+      headers: { origin: 'https://demo.example', 'access-control-request-method': 'POST' },
+    });
+    assert.equal(response.status, 204);
+    assert.equal(response.headers.get('access-control-allow-origin'), '*');
+    assert.equal(response.headers.get('access-control-allow-credentials'), null);
   });
 });
 

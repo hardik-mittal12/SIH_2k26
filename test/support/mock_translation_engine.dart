@@ -1,8 +1,8 @@
-import '../../domain/language.dart';
-import '../../domain/translation_result.dart';
-import 'translation_engine.dart';
+import 'package:santali_setu/domain/language.dart';
+import 'package:santali_setu/domain/translation_result.dart';
+import 'package:santali_setu/inference/translation/translation_engine.dart';
 
-/// Test-only initialization stub. It deliberately cannot produce translations.
+/// Test-only initialization stub. It deliberately cannot provide translations.
 class MockTranslationEngine implements TranslationEngine {
   bool _initialized = false;
 

@@ -1,8 +1,10 @@
-# Santali Setu API backend
+# Santali Setu backend
 
-Node.js 20+ / Express 5 backend. Sarvam credentials exist only in the server environment. The Flutter app calls this service; it never calls Sarvam directly.
+Node 20+ / Express backend used by the Android demo. The Sarvam key is read only from `server/.env`; the Flutter client never sends or stores it.
 
 ## Local setup
+
+From the repository root:
 
 ```bash
 cd server
@@ -10,21 +12,21 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` and set `SARVAM_API_KEY` from the Sarvam dashboard. Do not commit `.env`. Then run:
+Set `SARVAM_API_KEY` in the local `.env`, then start the server:
 
 ```bash
 npm run dev
 ```
 
-The backend listens on `0.0.0.0:${PORT:-3000}`. `GET /health` confirms service/key configuration without revealing the key.
+The backend defaults to port `3000`, binds to `0.0.0.0` for emulator/phone access, and loads `.env` automatically. No other local environment configuration is required. `GET /health` reports status and model IDs without exposing credentials.
 
-## Provider wiring
+## API flow
 
-- Speech: `POST https://api.sarvam.ai/speech-to-text`, multipart `file`, `language_code` (`hi-IN` or `sat-IN`), `model=saaras:v4`, `mode=transcribe`.
-- Translation: `POST https://api.sarvam.ai/translate`, JSON `input`, `source_language_code`, `target_language_code`, `model=sarvam-translate:v1`, `mode=formal`.
-- Authentication: `api-subscription-key` header, server-side only.
+- `POST /api/voice-translate`: `multipart/form-data` containing `audio` (mono 16 kHz PCM16 WAV) and `language` (`hi-IN` or `sat-IN`). Calls Saaras v4, then Sarvam Translate v1 in the matching reverse language direction; responds with both `transcript` and `translatedText`.
+- `POST /api/speech-to-text`: standalone Saaras v4 transcription endpoint with the same multipart fields.
+- `POST /api/translate`: JSON `{ text, sourceLanguage, targetLanguage }`, using Sarvam Translate v1. Only Hindi ↔ Santali pairs are accepted.
 
-The mobile app sends a mono PCM16, 16 kHz WAV in `audio` to `POST /api/speech-to-text`; the backend checks it and forwards it to Sarvam as `file`. Audio requests are limited to 30 seconds and 10 MB. Translation accepts only the Hindi↔Santali language pair and up to 2,000 characters.
+Provider calls use the server-only `api-subscription-key` header and request timeouts. WAV format, duration (30 seconds), and upload size (10 MB) are validated. Translation input is capped at 2,000 Unicode code points. Errors returned to the app are sanitized. Non-credentialed CORS preflight is enabled; the native Android client itself does not require CORS. API routes have a built-in per-IP limit of 30 requests per minute; configure additional host/provider quotas before public deployment.
 
 ## Tests
 
@@ -32,23 +34,18 @@ The mobile app sends a mono PCM16, 16 kHz WAV in `audio` to `POST /api/speech-to
 npm test
 ```
 
-These unit/route tests inject provider stubs and test validation, routing, fields, and error handling. They are not real AI tests.
+Unit/route tests inject stubs for deterministic validation; they are not live provider calls.
 
-For a real, non-mocked end-to-end provider run, set in `.env`:
-
-```dotenv
-SARVAM_HI_WAV=/absolute/path/to/hindi-16k-mono.wav
-SARVAM_SAT_WAV=/absolute/path/to/santali-16k-mono.wav
-```
-
-Use genuine recordings, not generated speech. Santali audio should be provided by a fluent speaker. Then run:
+For a real, billable end-to-end provider run, provide your own licensed 16 kHz mono PCM WAV recordings, 30 seconds or shorter:
 
 ```bash
+SARVAM_HI_WAV=/absolute/path/hindi.wav \
+SARVAM_SAT_WAV=/absolute/path/santali.wav \
 npm run test:integration
 ```
 
-This suite posts the files through the actual Express endpoints and invokes Sarvam Saaras and Sarvam Translate for both directions. It prints actual response strings. It skips if the key or either audio path is missing.
+The test reads `SARVAM_API_KEY` from `.env`, calls both real voice-translation directions, and prints the actual transcript and translation responses. No sample audio is included in this repository.
 
-## Deploy
+## Deployment
 
-Deploy this folder as a Node 20+ web service. Configure `SARVAM_API_KEY` and `PORT` as provider environment secrets, bind/proxy HTTPS, and point Flutter's `API_BASE_URL` to the HTTPS origin. No Sarvam key is required or accepted by Flutter. The backend has no end-user authentication, so configure rate/usage limits at the hosting/provider layer before public exposure.
+Deploy this folder as a Node 20+ service. Configure only `SARVAM_API_KEY` as a server secret; the host-provided `PORT` is honored, defaulting to `3000`. Put the service behind HTTPS for deployed demos and change `backendBaseUrl` in `lib/config/app_config.dart` to that HTTPS origin. The demo has no end-user authentication; set provider/hosting usage and rate limits before public exposure.
