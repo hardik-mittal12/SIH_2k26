@@ -154,6 +154,31 @@ class ModelManager {
     }
   }
 
+  Future<VoiceTranslationResult> translateSpeech({
+    required Uint8List wavAudio,
+    required Language source,
+    required Language target,
+    void Function(bool uploadFinished)? onUploadFinished,
+  }) async {
+    if (state != ModelState.ready) {
+      throw StateError(errorMessage ?? 'The Sarvam backend is not ready.');
+    }
+    final engine = _speechToTextEngine;
+    if (engine is! VoiceTranslationEngine) {
+      throw StateError('Voice translation is unavailable in this build.');
+    }
+    try {
+      return await engine.translateSpeech(
+        wavAudio: wavAudio,
+        source: source,
+        target: target,
+        onUploadFinished: onUploadFinished,
+      );
+    } catch (error) {
+      throw StateError('Speech translation failed: $error');
+    }
+  }
+
   Future<void> cancelSpeech() => _speechEngine.cancelRecording();
   Future<void> dispose() async {
     await _speechEngine.dispose();

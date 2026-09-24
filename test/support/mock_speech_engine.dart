@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
-import '../../domain/language.dart';
-import 'speech_engine.dart';
+import 'package:santali_setu/domain/language.dart';
+import 'package:santali_setu/inference/speech/speech_engine.dart';
 
 /// Test-only recorder stub. It never produces synthetic audio or a transcript.
 class MockSpeechEngine implements SpeechEngine {

@@ -1,160 +1,131 @@
-# Santali Setu — SIH 2026 API-backed prototype
+# Santali Setu
 
-Flutter Android client for bidirectional Hindi ↔ Santali speech translation. The app records locally and sends the recording to this project's backend. The backend alone holds the Sarvam API key and calls Sarvam Saaras for transcription, then Sarvam Translate for translation. **Inference is cloud/API-based in this version; offline operation is not supported.** No production code returns mock AI output.
+A focused Android demo for **Hindi ↔ Santali speech translation**. Choose which language to speak, tap the microphone, and see the recognized speech and translation together. The app uses Sarvam Saaras v4 for speech recognition and Sarvam Translate v1 for translation; all provider calls and the Sarvam credential stay on the project backend.
 
-## Verified Sarvam API configuration
+> **Manual API check:** The Sarvam APIs and both `hi-IN` ↔ `sat-IN` directions have been manually verified for this demo. The automated live integration test is still optional and requires your own key and audio recordings.
 
-Based on Sarvam's current API documentation:
+## What you need
 
-- Speech endpoint: `POST https://api.sarvam.ai/speech-to-text`, multipart field `file`, `mode=transcribe`, `model=saaras:v4`. `saaras:v4` is currently documented as the latest model; `saaras:v3` is also supported. The docs list Hindi `hi-IN` and Santali `sat-IN` for transcription. The endpoint accepts WAV and works best at 16 kHz; Saaras REST is documented for audio up to 30 seconds. [STT endpoint](https://docs.sarvam.ai/api-reference/speech-to-text/transcribe) · [Saaras model guide](https://docs.sarvam.ai/api/getting-started/models/saaras)
-- Translation endpoint: `POST https://api.sarvam.ai/translate`, model `sarvam-translate:v1`, formal mode. The current language list includes Hindi `hi-IN` and Santali `sat-IN`; the documented text limit for this model is 2,000 characters. [Translation endpoint](https://docs.sarvam.ai/api-reference/text/translate-text)
-- Sarvam authentication is sent by the backend as the `api-subscription-key` header. The key is never compiled into Flutter.
+- Node.js 20 or later and npm
+- Flutter and Android Studio/Android SDK
+- A Sarvam API key
+- An Android emulator, or an Android phone and a trusted shared Wi-Fi network
 
-The selected model IDs are `saaras:v4` and `sarvam-translate:v1`. Saaras v4 is used with explicit `language_code=hi-IN` or `sat-IN`. Translation sends `source_language_code` and `target_language_code` in the selected direction.
-
-## Clone and start the backend
-
-Requirements: Node.js 20 or later.
+## 1. Clone and start the backend
 
 ```bash
 git clone https://github.com/hardik-mittal12/SIH_2k26.git
-cd SIH_2k26/server
+cd SIH_2k26
+cd server
 npm install
 cp .env.example .env
 ```
 
-Open `server/.env` and put your Sarvam key on the `SARVAM_API_KEY` line:
+Open `server/.env` and put your Sarvam API key on the `SARVAM_API_KEY=` line. This is the **only required app/backend secret**. Keep the file on your machine; `.env` is ignored by Git. The backend uses port `3000` by default and needs no other settings for local development.
 
-```dotenv
-SARVAM_API_KEY=paste_your_key_here
-PORT=3000
-```
-
-Get the key from your Sarvam dashboard. Keep it only in `server/.env`; the repository ignores this file. Never paste the key into Flutter, `--dart-define`, a screenshot, or a checked-in file.
-
-Start the development server:
+Start the backend:
 
 ```bash
 npm run dev
 ```
 
-The server binds to `0.0.0.0:3000`. Confirm it is running from another terminal:
+Leave it running. In another terminal you can check that it is reachable:
 
 ```bash
 curl http://127.0.0.1:3000/health
 ```
 
-The response includes `sarvamConfigured: true` when the key is present; it does not expose the key. API routes return useful sanitized errors if the key is missing or Sarvam is unavailable.
+The health response indicates whether the server has a key configured; it never returns the key.
 
-## Run Flutter
+## 2. Run the Android app
 
 From the repository root, in a second terminal:
 
 ```bash
-cd ..
+cd SIH_2k26
 flutter pub get
-flutter run --dart-define=API_BASE_URL=http://10.0.2.2:3000
+flutter run
 ```
 
-`10.0.2.2` is the Android emulator's special route to the development host machine. The API address has no default or hardcoded localhost fallback; it must be supplied with `API_BASE_URL`.
+The app is preconfigured to use `http://10.0.2.2:3000`, the Android emulator's route to the computer running the backend. No API URL command-line flags or Dart edits are needed for the emulator.
 
 ### Physical Android phone
 
-1. Connect the phone and development Mac to the same trusted Wi-Fi network; enable USB debugging and connect the phone, or use wireless debugging.
-2. Find the Mac's LAN address, for example `ipconfig getifaddr en0` (Wi-Fi; use the active interface if it differs).
-3. Keep the backend running; it binds to `0.0.0.0`. Allow incoming connections to port 3000 in the Mac firewall if prompted.
-4. Run Flutter using the Mac's LAN IP, not `localhost` and not `10.0.2.2`:
+1. Connect the phone and computer to the same trusted Wi-Fi network. Enable USB debugging and connect the phone, or use Android wireless debugging.
+2. Find the computer's LAN IP address (for example, on macOS: `ipconfig getifaddr en0`; on Windows: `ipconfig`; on Linux: `ip addr`).
+3. Keep the backend running. Allow inbound connections to port `3000` through the computer firewall if prompted.
+4. Open **`lib/config/app_config.dart`** and change `backendBaseUrl` to `http://<COMPUTER-LAN-IP>:3000`. This is the single place to configure the app's backend address. Do not use `localhost` or `10.0.2.2` on a physical phone.
+5. Run `flutter run` again with the phone selected.
+
+The Android demo permits local HTTP so the emulator and a phone on a trusted LAN can reach the backend. For a deployed backend, set the same `backendBaseUrl` to its HTTPS address. Do not expose the local development server on a public or untrusted network.
+
+## Using the app
+
+1. Check the direction card: **Speak in** and **Translate to** show the current languages. Tap the swap icon to reverse them.
+2. Tap the large microphone and allow microphone permission. Speak clearly, then tap stop.
+3. Santali Setu uploads the WAV recording. The backend sends it to Saaras v4 in the selected language, passes the transcript to Sarvam Translate v1, and returns both texts.
+4. Read the recognized speech and translation. Use the copy icon to copy the result, or the clear icon to start over.
+
+Hindi speech uses `hi-IN` and translates `hi-IN → sat-IN`. Santali speech uses `sat-IN` and translates `sat-IN → hi-IN`. Audio is recorded as mono PCM16 16 kHz WAV and requests are limited to 30 seconds.
+
+## Backend endpoints
+
+- `GET /health` — backend status and model names; never returns credentials.
+- `POST /api/voice-translate` — multipart fields `audio` (WAV) and `language` (`hi-IN` or `sat-IN`). Runs speech recognition and translation on the backend, returning `transcript` and `translatedText` together, plus the selected source/target codes.
+- `POST /api/speech-to-text` — speech-only endpoint with the same multipart fields.
+- `POST /api/translate` — JSON `{ "text": "...", "sourceLanguage": "hi-IN", "targetLanguage": "sat-IN" }`; only Hindi ↔ Santali is accepted.
+
+The backend validates audio type, WAV structure, sample format, duration, and size; it caps text at 2,000 Unicode code points. Responses use clear sanitized errors, provider calls have timeouts, non-credentialed CORS preflight is supported, and API routes are rate-limited per IP. Native Flutter does not rely on browser CORS.
+
+## Release APK
+
+Ensure `backendBaseUrl` in `lib/config/app_config.dart` points to the backend the demo phone can reach, then run from the repository root:
 
 ```bash
-flutter devices
-flutter run -d <phone-device-id> \\
-  --dart-define=API_BASE_URL=http://<MAC-LAN-IP>:3000
+flutter build apk --release
 ```
 
-For example, replace `<MAC-LAN-IP>` with the address printed by `ipconfig getifaddr en0`. Debug builds permit cleartext HTTP for emulator/LAN development only. **Use an HTTPS URL for release builds and deployed demos.** Do not expose the development server or Sarvam key on an untrusted public network.
+APK location:
 
-## Endpoints
-
-### `POST /api/speech-to-text`
-
-`multipart/form-data`: `audio=<WAV file>`, `language=hi-IN|sat-IN`. The app's Android recorder supplies mono PCM16 WAV at 16 kHz. The backend validates WAV headers, format, non-empty audio, 10 MB maximum, and the Saaras 30-second request limit before forwarding it to Sarvam as multipart field `file`.
-
-Response:
-
-```json
-{"success":true,"text":"<Sarvam transcript>","language":"hi-IN","requestId":"..."}
+```text
+build/app/outputs/flutter-apk/app-release.apk
 ```
 
-### `POST /api/translate`
-
-JSON request:
-
-```json
-{"text":"नमस्ते","sourceLanguage":"hi-IN","targetLanguage":"sat-IN"}
-```
-
-The reverse direction is `sourceLanguage=sat-IN`, `targetLanguage=hi-IN`.
-
-Response:
-
-```json
-{"success":true,"translatedText":"<Sarvam translation>","requestId":"..."}
-```
-
-`GET /health` reports backend configuration only. There is no inference endpoint other than the two Sarvam-backed routes; no local model or mock fallback is active.
-
-## Pipeline and errors
-
-Hindi → Santali: native microphone → 16 kHz mono PCM16 WAV → backend `/api/speech-to-text` with `hi-IN` → transcript shown in the source field → backend `/api/translate` with `hi-IN` → `sat-IN` → translation shown in the result.
-
-Santali → Hindi uses the swapped direction and `sat-IN` for transcription. The UI exposes recording, uploading, transcribing, and translating progress, blocks concurrent actions, and displays backend/network/provider errors without stack traces. Microphone permission is requested on Android when recording starts.
-
-Sarvam REST speech requests are limited to 30 seconds here. Longer recordings are rejected by the app/backend; the application does not silently truncate them. Translation text is limited to 2,000 Unicode code points.
+For a demo install, copy the APK to the phone or run `adb install -r build/app/outputs/flutter-apk/app-release.apk`. This project signs the demo release with the generated debug signing key so the command works without extra setup. A Play Store/public production release must use a privately managed release keystore and an HTTPS backend.
 
 ## Tests
 
-Unit/route tests use isolated provider stubs and do **not** claim a real Sarvam response:
+Backend unit and route tests (provider calls are isolated test stubs, not live Sarvam results):
 
 ```bash
 cd server
 npm test
 ```
 
-The separate integration test makes real requests through the backend to Sarvam and is not mocked. It requires a valid `SARVAM_API_KEY` in `server/.env` and two real, licensed 16 kHz mono PCM WAV files no longer than 30 seconds. Set `SARVAM_HI_WAV` and `SARVAM_SAT_WAV` in `server/.env`, then run:
+The real-provider test sends genuine audio to the backend and Sarvam in both directions. It makes billable external requests; use your own licensed 16 kHz mono PCM WAV files (30 seconds or shorter):
 
 ```bash
+cd server
+SARVAM_HI_WAV=/absolute/path/hindi.wav \
+SARVAM_SAT_WAV=/absolute/path/santali.wav \
 npm run test:integration
 ```
 
-The test prints the actual Hindi transcript, Hindi→Santali translation, Santali transcript, and Santali→Hindi translation. It is skipped when credentials or samples are absent. This checkout has no Sarvam key or audio fixtures, so **real provider tests and actual sample outputs were not run here**.
+The test uses `SARVAM_API_KEY` from `server/.env`. No test audio is fabricated or bundled.
 
-To prepare audio samples on a Mac from your own recordings (with FFmpeg installed):
-
-```bash
-ffmpeg -i my_hindi_recording.m4a -ac 1 -ar 16000 -sample_fmt s16 -t 30 server/hindi_16k.wav
-ffmpeg -i my_santali_recording.m4a -ac 1 -ar 16000 -sample_fmt s16 -t 30 server/santali_16k.wav
-```
-
-Use a native Santali speaker for the Santali sample. Add those paths as `SARVAM_HI_WAV` and `SARVAM_SAT_WAV` in the ignored `server/.env`.
-
-Flutter checks and Android build:
+Flutter/Android checks, when the SDKs are installed:
 
 ```bash
 flutter pub get
 flutter analyze
 flutter test
 flutter build apk --debug
-flutter build apk --release \\
-  --dart-define=API_BASE_URL=https://<your-backend-host>
-adb install -r build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --release
 ```
 
-This execution environment has no Flutter/Dart, Java, Android SDK, emulator, or physical phone, so these commands and microphone capture could not be tested here.
+## Project notes
 
-## Deployment notes
-
-Deploy `server/` as a Node 20+ web service on a simple Node-capable host. Set `SARVAM_API_KEY` and `PORT` in that host's secret/environment settings, expose the assigned HTTPS URL, then build Flutter with `--dart-define=API_BASE_URL=https://<your-backend-host>`. Do not enable HTTP/cleartext for a production build. The Sarvam key remains only in the server environment. Configure provider usage limits and hosting-level rate limits before public deployment; this demo backend does not implement user authentication.
-
-## Project status
-
-The API-backed production path is implemented; Node backend unit and route tests can run locally. Real Sarvam calls require the user's server-side API key and real audio samples. No real provider result, physical Android test, Flutter test, or APK build is claimed in this environment.
+- Production Flutter wiring uses only the Sarvam backend adapters. The mock adapters are retained solely for the widget test and cannot generate translation output.
+- No offline IndicConformer or IndicTrans2 model is included or used.
+- The demo backend has no end-user authentication or usage quota. Use provider and host-side rate/usage limits before public deployment.
+- Never add a Sarvam key to Flutter/Dart, Android resources, Gradle files, APKs, or source control.

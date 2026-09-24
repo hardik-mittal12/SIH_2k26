@@ -1,4 +1,0 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <!-- Permit HTTP only in debug builds for emulator/LAN development backends. -->
-    <application android:usesCleartextTraffic="true" />
-</manifest>

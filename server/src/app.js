@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import { rateLimit } from 'express-rate-limit';
 import { createSpeechRouter } from './routes/speech.js';
 import { createTranslationRouter } from './routes/translation.js';
 import { createSarvamService, SarvamApiError } from './services/sarvam.js';
@@ -7,6 +8,16 @@ import { createSarvamService, SarvamApiError } from './services/sarvam.js';
 export function createApp({ sarvam = createSarvamService() } = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // Native Flutter clients do not send browser credentials. Wildcard CORS keeps
+  // optional browser-based demos usable without enabling credentialed requests.
+  app.use((request, response, next) => {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    response.setHeader('Access-Control-Max-Age', '600');
+    if (request.method === 'OPTIONS') return response.sendStatus(204);
+    next();
+  });
   app.use(express.json({ limit: '32kb', strict: true }));
 
   app.get('/health', (_request, response) => {
@@ -18,7 +29,20 @@ export function createApp({ sarvam = createSarvamService() } = {}) {
     });
   });
 
+  app.use('/api', rateLimit({
+    windowMs: 60_000,
+    limit: 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      success: false,
+      error: 'Too many requests. Please wait a moment and try again.',
+      code: 'RATE_LIMITED',
+    },
+  }));
+
   app.use('/api/speech-to-text', createSpeechRouter(sarvam));
+  app.use('/api/voice-translate', createSpeechRouter(sarvam, { translateAudio: true }));
   app.use('/api/translate', createTranslationRouter(sarvam));
 
   app.use((_request, response) => {

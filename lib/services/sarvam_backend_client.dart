@@ -4,9 +4,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 
+import '../config/app_config.dart';
 import '../domain/language.dart';
-
-const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
 enum SpeechApiStage { uploading, transcribing }
 
@@ -24,6 +23,20 @@ class SpeechTranscription {
   final Duration elapsed;
 }
 
+class SpeechTranslation {
+  const SpeechTranslation({
+    required this.transcript,
+    required this.translatedText,
+    required this.detectedLanguage,
+    required this.elapsed,
+  });
+
+  final String transcript;
+  final String translatedText;
+  final String? detectedLanguage;
+  final Duration elapsed;
+}
+
 class BackendApiException implements Exception {
   const BackendApiException(this.message, {this.code, this.statusCode});
 
@@ -37,7 +50,7 @@ class BackendApiException implements Exception {
 
 /// Client for the project's backend only. Sarvam credentials never enter Flutter.
 class SarvamBackendClient {
-  SarvamBackendClient({String baseUrl = apiBaseUrl}) : _baseUrl = baseUrl.trim();
+  SarvamBackendClient({String baseUrl = AppConfig.backendBaseUrl}) : _baseUrl = baseUrl.trim();
 
   final String _baseUrl;
   final Random _random = Random.secure();
@@ -45,7 +58,7 @@ class SarvamBackendClient {
   Uri _uri(String route) {
     if (_baseUrl.isEmpty) {
       throw const BackendApiException(
-        'The API address is not configured. Run Flutter with --dart-define=API_BASE_URL=…',
+        'The backend address is not configured. Check the app connection settings.',
       );
     }
     final base = Uri.tryParse(_baseUrl);
@@ -53,7 +66,7 @@ class SarvamBackendClient {
         !const {'http', 'https'}.contains(base.scheme) ||
         base.host.isEmpty ||
         base.userInfo.isNotEmpty) {
-      throw const BackendApiException('API_BASE_URL must be a valid HTTP(S) URL.');
+      throw const BackendApiException('The configured backend address is not a valid HTTP(S) URL.');
     }
     return base.replace(
       path: '${base.path.replaceFirst(RegExp(r'/$'), '')}$route',
@@ -63,11 +76,11 @@ class SarvamBackendClient {
   }
 
   Future<Map<String, dynamic>> _getJson(Uri uri) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    final client = HttpClient()..connectionTimeout = AppConfig.connectTimeout;
     try {
-      final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
+      final request = await client.getUrl(uri).timeout(AppConfig.connectTimeout);
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-      final response = await request.close().timeout(const Duration(seconds: 20));
+      final response = await request.close().timeout(AppConfig.connectTimeout + const Duration(seconds: 8));
       return await _decodeResponse(response);
     } on BackendApiException {
       rethrow;
@@ -81,13 +94,26 @@ class SarvamBackendClient {
       );
     } on HttpException {
       throw const BackendApiException('The backend returned an invalid response.');
+    } on IOException {
+      throw const BackendApiException(
+        'The network connection could not be secured. Check the backend address and try again.',
+      );
     } finally {
       client.close(force: true);
     }
   }
 
   Future<Map<String, dynamic>> _decodeResponse(HttpClientResponse response) async {
-    final text = await utf8.decoder.bind(response).join();
+    String text;
+    try {
+      text = await utf8.decoder
+          .bind(response.timeout(const Duration(seconds: 20)))
+          .join();
+    } on FormatException {
+      throw const BackendApiException('The backend returned an invalid response.');
+    } on IOException {
+      throw const BackendApiException('The backend response could not be read. Please try again.');
+    }
     Map<String, dynamic> payload;
     try {
       payload = Map<String, dynamic>.from(jsonDecode(text) as Map);
@@ -117,13 +143,70 @@ class SarvamBackendClient {
     }
     if (payload['sarvamConfigured'] != true) {
       throw const BackendApiException(
-        'The backend is running, but SARVAM_API_KEY is not configured in server/.env.',
+        'The translation service is not configured yet. Please ask the demo host to check its setup.',
         code: 'SARVAM_NOT_CONFIGURED',
       );
     }
   }
 
   Future<SpeechTranscription> transcribe({
+    required Uint8List wavAudio,
+    required Language language,
+    SpeechStageCallback? onStage,
+  }) async {
+    final stopwatch = Stopwatch()..start();
+    final payload = await _uploadAudio(
+      route: '/api/speech-to-text',
+      wavAudio: wavAudio,
+      language: language,
+      onStage: onStage,
+    );
+    final text = payload['text'];
+    if (payload['success'] != true || text is! String || text.trim().isEmpty) {
+      throw const BackendApiException('Speech recognition returned no transcript.');
+    }
+    stopwatch.stop();
+    return SpeechTranscription(
+      text: text.trim(),
+      detectedLanguage: payload['language'] as String?,
+      elapsed: stopwatch.elapsed,
+    );
+  }
+
+  Future<SpeechTranslation> translateSpeech({
+    required Uint8List wavAudio,
+    required Language source,
+    required Language target,
+    SpeechStageCallback? onStage,
+  }) async {
+    if (source == target) {
+      throw const BackendApiException('Choose two different languages to translate.');
+    }
+    final stopwatch = Stopwatch()..start();
+    final payload = await _uploadAudio(
+      route: '/api/voice-translate',
+      wavAudio: wavAudio,
+      language: source,
+      onStage: onStage,
+    );
+    final transcript = payload['transcript'];
+    final translatedText = payload['translatedText'];
+    if (payload['success'] != true ||
+        transcript is! String || transcript.trim().isEmpty ||
+        translatedText is! String || translatedText.trim().isEmpty) {
+      throw const BackendApiException('Speech translation returned an incomplete result.');
+    }
+    stopwatch.stop();
+    return SpeechTranslation(
+      transcript: transcript.trim(),
+      translatedText: translatedText.trim(),
+      detectedLanguage: payload['language'] as String?,
+      elapsed: stopwatch.elapsed,
+    );
+  }
+
+  Future<Map<String, dynamic>> _uploadAudio({
+    required String route,
     required Uint8List wavAudio,
     required Language language,
     SpeechStageCallback? onStage,
@@ -135,47 +218,40 @@ class SarvamBackendClient {
     if (wavAudio.length - 44 > maxDurationBytes) {
       throw const BackendApiException('Keep each recording to 30 seconds or less.');
     }
-    final uri = _uri('/api/speech-to-text');
+    final uri = _uri(route);
     final boundary = 'santalisetu-${_random.nextInt(1 << 32).toRadixString(16)}';
     final body = _multipartBody(
       boundary: boundary,
       language: language.sarvamCode,
       wavAudio: wavAudio,
     );
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
-    final stopwatch = Stopwatch()..start();
+    final client = HttpClient()..connectionTimeout = AppConfig.connectTimeout;
     try {
-      final request = await client.postUrl(uri).timeout(const Duration(seconds: 12));
+      final request = await client.postUrl(uri).timeout(AppConfig.connectTimeout);
       request.headers
         ..set(HttpHeaders.acceptHeader, 'application/json')
         ..set(HttpHeaders.contentTypeHeader, 'multipart/form-data; boundary=$boundary');
       request.contentLength = body.length;
       onStage?.call(SpeechApiStage.uploading);
       request.add(body);
-      await request.flush().timeout(const Duration(seconds: 35));
+      await request.flush().timeout(AppConfig.connectTimeout + const Duration(seconds: 23));
       onStage?.call(SpeechApiStage.transcribing);
-      final response = await request.close().timeout(const Duration(seconds: 70));
-      final payload = await _decodeResponse(response);
-      final text = payload['text'];
-      if (payload['success'] != true || text is! String || text.trim().isEmpty) {
-        throw const BackendApiException('Speech recognition returned no transcript.');
-      }
-      stopwatch.stop();
-      return SpeechTranscription(
-        text: text.trim(),
-        detectedLanguage: payload['language'] as String?,
-        elapsed: stopwatch.elapsed,
-      );
+      final response = await request.close().timeout(AppConfig.speechTimeout);
+      return await _decodeResponse(response);
     } on BackendApiException {
       rethrow;
     } on TimeoutException {
-      throw const BackendApiException('Speech recognition timed out. Please try again.');
+      throw const BackendApiException('Speech processing timed out. Please try again.');
     } on SocketException {
       throw const BackendApiException(
-        'Unable to connect to the translation service. Please check your internet connection and backend address.',
+        'Unable to connect to the translation service. Check your internet connection and backend address.',
       );
     } on HttpException {
       throw const BackendApiException('The backend returned an invalid response.');
+    } on IOException {
+      throw const BackendApiException(
+        'The network connection could not be secured. Check the backend address and try again.',
+      );
     } finally {
       client.close(force: true);
     }
@@ -215,9 +291,9 @@ class SarvamBackendClient {
     if (trimmed.runes.length > 2_000) {
       throw const BackendApiException('Keep translated text under 2,000 characters.');
     }
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    final client = HttpClient()..connectionTimeout = AppConfig.connectTimeout;
     try {
-      final request = await client.postUrl(_uri('/api/translate')).timeout(const Duration(seconds: 12));
+      final request = await client.postUrl(_uri('/api/translate')).timeout(AppConfig.connectTimeout);
       request.headers
         ..set(HttpHeaders.acceptHeader, 'application/json')
         ..contentType = ContentType.json;
@@ -226,7 +302,7 @@ class SarvamBackendClient {
         'sourceLanguage': source.sarvamCode,
         'targetLanguage': target.sarvamCode,
       }));
-      final response = await request.close().timeout(const Duration(seconds: 60));
+      final response = await request.close().timeout(AppConfig.translationTimeout);
       final payload = await _decodeResponse(response);
       final translatedText = payload['translatedText'];
       if (payload['success'] != true ||
@@ -245,6 +321,10 @@ class SarvamBackendClient {
       );
     } on HttpException {
       throw const BackendApiException('The backend returned an invalid response.');
+    } on IOException {
+      throw const BackendApiException(
+        'The network connection could not be secured. Check the backend address and try again.',
+      );
     } finally {
       client.close(force: true);
     }

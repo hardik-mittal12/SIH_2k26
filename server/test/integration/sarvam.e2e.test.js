@@ -13,46 +13,35 @@ const skipReason = !process.env.SARVAM_API_KEY
     ? 'Set SARVAM_HI_WAV and SARVAM_SAT_WAV to real licensed 16 kHz mono PCM WAV samples.'
     : false;
 
-test('real Hindi/Santali speech → Sarvam transcription → Sarvam translation', {
+test('real Hindi ↔ Santali voice translation calls Saaras v4 and Sarvam Translate v1', {
   skip: skipReason,
-  timeout: 180_000,
+  timeout: 240_000,
 }, async () => {
   const server = createServer(createApp());
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  const speech = async (path, language) => {
+  const translateSample = async (path, language, targetLanguage) => {
     const form = new FormData();
     form.set('language', language);
     form.set('audio', new Blob([await readFile(path)], { type: 'audio/wav' }), 'sample.wav');
-    const response = await fetch(`${base}/api/speech-to-text`, { method: 'POST', body: form });
+    const response = await fetch(`${base}/api/voice-translate`, { method: 'POST', body: form });
     const body = await response.json();
     assert.equal(response.status, 200, JSON.stringify(body));
     assert.equal(body.success, true);
-    assert.ok(body.text.trim());
-    return body.text.trim();
-  };
-  const translate = async (text, sourceLanguage, targetLanguage) => {
-    const response = await fetch(`${base}/api/translate`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ text, sourceLanguage, targetLanguage }),
-    });
-    const body = await response.json();
-    assert.equal(response.status, 200, JSON.stringify(body));
-    assert.equal(body.success, true);
+    assert.equal(body.language, language);
+    assert.equal(body.targetLanguage, targetLanguage);
+    assert.ok(body.transcript.trim());
     assert.ok(body.translatedText.trim());
-    return body.translatedText.trim();
+    return body;
   };
   try {
-    const hindiTranscript = await speech(hindiAudio, 'hi-IN');
-    const santaliResult = await translate(hindiTranscript, 'hi-IN', 'sat-IN');
-    console.log(`REAL Hindi STT: ${hindiTranscript}`);
-    console.log(`REAL Hindi → Santali: ${santaliResult}`);
+    const hindi = await translateSample(hindiAudio, 'hi-IN', 'sat-IN');
+    console.log(`REAL Hindi transcript: ${hindi.transcript}`);
+    console.log(`REAL Hindi → Santali: ${hindi.translatedText}`);
 
-    const santaliTranscript = await speech(santaliAudio, 'sat-IN');
-    const hindiResult = await translate(santaliTranscript, 'sat-IN', 'hi-IN');
-    console.log(`REAL Santali STT: ${santaliTranscript}`);
-    console.log(`REAL Santali → Hindi: ${hindiResult}`);
+    const santali = await translateSample(santaliAudio, 'sat-IN', 'hi-IN');
+    console.log(`REAL Santali transcript: ${santali.transcript}`);
+    console.log(`REAL Santali → Hindi: ${santali.translatedText}`);
   } finally {
     await new Promise((resolve) => server.close(resolve));
   }

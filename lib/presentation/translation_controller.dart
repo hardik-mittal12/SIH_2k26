@@ -47,7 +47,9 @@ class TranslationController extends ChangeNotifier {
     phase = _models.state == ModelState.ready
         ? TranslationPhase.idle
         : TranslationPhase.error;
-    error = _models.errorMessage;
+    error = _models.errorMessage == null
+        ? null
+        : _userMessage(_models.errorMessage!);
     notifyListeners();
   }
 
@@ -59,6 +61,23 @@ class TranslationController extends ChangeNotifier {
     }
   }
 
+  void clear() {
+    if (isBusy) return;
+    input = '';
+    output = '';
+    metrics = null;
+    if (_models.state == ModelState.ready) {
+      error = null;
+      phase = TranslationPhase.idle;
+    } else {
+      error = _userMessage(
+        _models.errorMessage ?? 'The translation service is not ready.',
+      );
+      phase = TranslationPhase.error;
+    }
+    notifyListeners();
+  }
+
   void swap() {
     if (isBusy) return;
     direction = direction.swapped();
@@ -66,8 +85,15 @@ class TranslationController extends ChangeNotifier {
     input = output;
     output = oldInput;
     metrics = null;
-    error = null;
-    phase = TranslationPhase.idle;
+    if (_models.state == ModelState.ready) {
+      error = null;
+      phase = TranslationPhase.idle;
+    } else {
+      error = _userMessage(
+        _models.errorMessage ?? 'The translation service is not ready.',
+      );
+      phase = TranslationPhase.error;
+    }
     notifyListeners();
   }
 
@@ -123,9 +149,11 @@ class TranslationController extends ChangeNotifier {
     notifyListeners();
     try {
       final audio = await _models.stopSpeech(source);
-      final transcription = await _models.transcribe(
+      final target = source == Language.hindi ? Language.santali : Language.hindi;
+      final result = await _models.translateSpeech(
         wavAudio: audio,
-        language: source,
+        source: source,
+        target: target,
         onUploadFinished: (finished) {
           phase = finished
               ? TranslationPhase.transcribing
@@ -133,22 +161,14 @@ class TranslationController extends ChangeNotifier {
           notifyListeners();
         },
       );
-      input = transcription.text;
-      phase = TranslationPhase.translating;
-      notifyListeners();
-      final translated = await _models.translate(
-        text: transcription.text,
-        source: source,
-        target: source == Language.hindi ? Language.santali : Language.hindi,
-      );
-      output = translated.text;
+      input = result.transcript;
+      output = result.translatedText;
       metrics = TranslationMetrics(
-        preprocessing: translated.metrics.preprocessing,
-        inference: translated.metrics.inference,
-        postprocessing: translated.metrics.postprocessing,
-        speechRecognition: transcription.elapsed,
-        total: transcription.elapsed + translated.metrics.total,
-        fromCache: translated.metrics.fromCache,
+        preprocessing: Duration.zero,
+        inference: result.elapsed,
+        postprocessing: Duration.zero,
+        speechRecognition: result.elapsed,
+        total: result.elapsed,
       );
       phase = TranslationPhase.success;
     } catch (exception) {
@@ -159,7 +179,33 @@ class TranslationController extends ChangeNotifier {
   }
 
   String _userMessage(Object error) {
-    return error.toString().replaceFirst('Bad state: ', '').replaceFirst('Exception: ', '');
+    final message = error
+        .toString()
+        .replaceAll('Bad state: ', '')
+        .replaceAll('Exception: ', '')
+        .replaceAll('Could not initialize the Sarvam translation service: ', '')
+        .replaceAll('Speech translation failed: ', '')
+        .replaceAll('Speech recognition failed: ', '')
+        .replaceAll('Recording failed: ', '')
+        .replaceAll('Translation failed: ', '');
+    if (message.contains('translation service is not configured') ||
+        message.contains('server/.env')) {
+      return 'The translation service is not ready yet. Please ask the demo host to check the service setup.';
+    }
+    if (message.contains('EMPTY_RECORDING')) {
+      return 'No speech was captured. Move closer to the microphone and try again.';
+    }
+    if (message.contains('MIC_PERMISSION_DENIED')) {
+      return 'Microphone permission is needed. Allow it in your phone settings and try again.';
+    }
+    if (message.contains('AUDIO_CONFIG_UNAVAILABLE') ||
+        message.contains('AUDIO_INIT_FAILED') ||
+        message.contains('AUDIO_START_FAILED') ||
+        message.contains('PlatformException') ||
+        message.contains('MissingPluginException')) {
+      return 'The microphone could not be started. Check microphone permission and try again.';
+    }
+    return message;
   }
 
   Future<void> retry() => boot();
