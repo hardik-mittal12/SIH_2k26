@@ -24,6 +24,7 @@ class _NoSpeechNetwork implements SpeechToTextEngine {
 
 class _WidgetAudioRecorder implements SpeechEngine {
   final Set<Language> _initialized = {};
+  Language? _recording;
 
   @override
   Future<void> initialize(Language language) async {
@@ -34,7 +35,9 @@ class _WidgetAudioRecorder implements SpeechEngine {
   bool isAvailable(Language language) => _initialized.contains(language);
 
   @override
-  Future<void> startRecording(Language language) async {}
+  Future<void> startRecording(Language language) async {
+    _recording = language;
+  }
 
   @override
   Future<Uint8List> stopRecording(Language language) async {
@@ -43,10 +46,13 @@ class _WidgetAudioRecorder implements SpeechEngine {
   }
 
   @override
-  Future<void> cancelRecording() async {}
+  Future<void> cancelRecording() async {
+    _recording = null;
+  }
 
   @override
   Future<void> dispose() async {
+    _recording = null;
     _initialized.clear();
   }
 }

@@ -293,12 +293,18 @@ class _RecordControlState extends State<_RecordControl>
     upperBound: 1.0,
   );
 
+  Timer? _timer;
+  int _elapsedSeconds = 0;
+
   bool get _recording => widget.phase == TranslationPhase.recording;
 
   @override
   void initState() {
     super.initState();
-    if (_recording) _pulse.repeat(reverse: true);
+    if (_recording) {
+      _pulse.repeat(reverse: true);
+      _startTimer();
+    }
   }
 
   @override
@@ -306,14 +312,31 @@ class _RecordControlState extends State<_RecordControl>
     super.didUpdateWidget(oldWidget);
     if (_recording && !_pulse.isAnimating) {
       _pulse.repeat(reverse: true);
+      _startTimer();
     } else if (!_recording && _pulse.isAnimating) {
       _pulse.stop();
       _pulse.value = 0;
+      _stopTimer();
     }
+  }
+
+  void _startTimer() {
+    _stopTimer();
+    _elapsedSeconds = 0;
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
+      setState(() => _elapsedSeconds++);
+    });
+  }
+
+  void _stopTimer() {
+    _timer?.cancel();
+    _timer = null;
   }
 
   @override
   void dispose() {
+    _stopTimer();
     _pulse.dispose();
     super.dispose();
   }
@@ -411,6 +434,17 @@ class _RecordControlState extends State<_RecordControl>
                 fontWeight: FontWeight.w600,
               ),
         ),
+        if (recording) ...[
+          const SizedBox(height: 4),
+          Text(
+            '${_elapsedSeconds}s / 30s',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colors.error,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+          ),
+        ],
       ],
     );
   }

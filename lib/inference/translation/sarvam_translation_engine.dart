@@ -41,7 +41,7 @@ class SarvamTranslationEngine implements TranslationEngine {
     final pre = Stopwatch()..start();
     final cleaned = text.trim();
     if (cleaned.isEmpty) throw ArgumentError('Enter text to translate.');
-    if (cleaned.runes.length > 2_000) {
+    if (cleaned.runes.length > 2000) {
       throw ArgumentError('Keep translated text under 2,000 characters.');
     }
     pre.stop();
