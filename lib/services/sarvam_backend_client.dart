@@ -214,7 +214,7 @@ class SarvamBackendClient {
     if (wavAudio.length <= 44) {
       throw const BackendApiException('The recording is empty. Please record again.');
     }
-    const maxDurationBytes = 16_000 * 2 * 30;
+    const maxDurationBytes = 16000 * 2 * 30;
     if (wavAudio.length - 44 > maxDurationBytes) {
       throw const BackendApiException('Keep each recording to 30 seconds or less.');
     }
@@ -288,7 +288,7 @@ class SarvamBackendClient {
   }) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) throw const BackendApiException('Enter text to translate.');
-    if (trimmed.runes.length > 2_000) {
+    if (trimmed.runes.length > 2000) {
       throw const BackendApiException('Keep translated text under 2,000 characters.');
     }
     final client = HttpClient()..connectionTimeout = AppConfig.connectTimeout;
