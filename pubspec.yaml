@@ -1,5 +1,5 @@
 name: santali_setu
-description: Offline-first Hindi ↔ Santali translation demo with pluggable inference.
+description: Hindi ↔ Santali speech translation app using a private backend and Sarvam AI APIs.
 publish_to: none
 version: 0.1.0+1
 
