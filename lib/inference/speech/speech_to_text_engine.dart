@@ -28,16 +28,17 @@ class VoiceTranslationResult {
   final Duration elapsed;
 }
 
+/// Speech recognition delegated to the project backend, which also provides
+/// combined speech recognition plus translation in a single request.
 abstract class SpeechToTextEngine {
   Future<SpeechRecognitionResult> transcribe({
     required Uint8List wavAudio,
     required Language language,
     void Function(bool uploadFinished)? onUploadFinished,
   });
-}
 
-/// Speech translation performed together by the backend in one request.
-abstract class VoiceTranslationEngine {
+  /// One request that transcribes [wavAudio] in [source] and translates the
+  /// transcript into [target] (POST /api/voice-translate on the backend).
   Future<VoiceTranslationResult> translateSpeech({
     required Uint8List wavAudio,
     required Language source,
